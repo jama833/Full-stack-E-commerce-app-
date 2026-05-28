@@ -4,7 +4,7 @@ Developed a scalable end-to-end ecommerce application using React 19 SPA, TypeSc
 Built responsive and reusable UI components with optimized API data fetching, caching, and synchronization
 Implemented REST APIs and improved application reliability through unit and integration testing with Jest
 Automated CI/CD pipelines using GitHub Actions for testing, build, and deployment workflows
-Deployed and managed the application on AWS EC2
+Deployed backend on AWS EC2 and frontend on Vercel for production
 
 ## Highlights
 
@@ -31,6 +31,11 @@ Full-stack-e-commerce-app-copy/
  
   README.md
 ```
+
+## Deployment
+
+- **Backend**: Deployed on AWS EC2
+- **Frontend**: Deployed on Vercel
 
 ## Run Locally
 
