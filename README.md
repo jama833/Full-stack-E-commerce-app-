@@ -10,7 +10,7 @@ Deployed backend on AWS EC2 and frontend on Vercel for production
 
 - **TanStack Query** Improves UX because the app feels fast and consistent 
 
-- **Jest  cover unit and integration flows, including product rendering, cart updates, checkout, and payment confirmation .
+- **Jest** covers unit and integration test flows, including product rendering, cart updates, checkout, and payment confirmation.
 - **Express REST API** provides products, cart items, delivery options, orders, and payment summary endpoints.
 - **GitHub Actions  are included to run tests automatically.
 
