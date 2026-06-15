@@ -1,18 +1,29 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import type { ReactElement } from 'react';
-import { QueryClient, QueryClientProvider, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HomePage } from '../Pages/homepage';
 import { CheckoutPage } from '../Pages/checkoutPage';
 import { StripePage } from '../Pages/StripePage';
-import { useCartQuery } from '../hooks/useCartQuery';
-import type { CartItem, Product } from '../types/interfaces';
+import {
+  useAddToCartMutation,
+  useCartQuery,
+  usePlaceOrderMutation,
+  useProductsQuery,
+  useRemoveCartItemMutation,
+  useUpdateCartItemMutation,
+} from '../hooks/useShop';
+import type { CartItem, Product } from '../types';
 
-jest.mock('axios');
-jest.mock('../hooks/useCartQuery');
+jest.mock('../hooks/useShop');
 jest.mock('../Pages/Header', () => ({
-  Header: ({ onSearch, searchPlaceholder }: { onSearch?: (query: string) => void; searchPlaceholder?: string }) => (
+  Header: ({
+    onSearch,
+    searchPlaceholder,
+  }: {
+    onSearch?: (query: string) => void;
+    searchPlaceholder?: string;
+  }) => (
     <input
       aria-label="search products"
       placeholder={searchPlaceholder}
@@ -24,21 +35,17 @@ jest.mock('../Pages/Footer', () => ({
   Footer: () => <div>Footer</div>,
 }));
 jest.mock('../Pages/CheckoutHeader', () => ({
-  CheckoutHeader: ({ totalQuantity }: { totalQuantity: number }) => <div>Checkout Header {totalQuantity}</div>,
+  CheckoutHeader: ({ totalQuantity }: { totalQuantity: number }) => (
+    <div>Checkout Header {totalQuantity}</div>
+  ),
 }));
-jest.mock('@tanstack/react-query', () => {
-  const actual = jest.requireActual('@tanstack/react-query');
-  return {
-    ...actual,
-    useQueryClient: jest.fn(),
-    useMutation: jest.fn(),
-  };
-});
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedUseProductsQuery = useProductsQuery as jest.Mock;
 const mockedUseCartQuery = useCartQuery as jest.Mock;
-const mockedUseQueryClient = useQueryClient as jest.Mock;
-const mockedUseMutation = useMutation as jest.Mock;
+const mockedUseAddToCartMutation = useAddToCartMutation as jest.Mock;
+const mockedUseUpdateCartItemMutation = useUpdateCartItemMutation as jest.Mock;
+const mockedUseRemoveCartItemMutation = useRemoveCartItemMutation as jest.Mock;
+const mockedUsePlaceOrderMutation = usePlaceOrderMutation as jest.Mock;
 
 function renderWithProviders(ui: ReactElement) {
   const queryClient = new QueryClient();
@@ -52,16 +59,26 @@ function renderWithProviders(ui: ReactElement) {
 describe('Pages unit tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedUseQueryClient.mockReturnValue({
-      invalidateQueries: jest.fn(),
+    mockedUseAddToCartMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+      variables: undefined,
     });
-    mockedUseMutation.mockReturnValue({
+    mockedUseUpdateCartItemMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+    });
+    mockedUseRemoveCartItemMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+    });
+    mockedUsePlaceOrderMutation.mockReturnValue({
       mutate: jest.fn(),
       isPending: false,
     });
   });
 
-  test('HomePage renders fetched products', async () => {
+  test('HomePage renders fetched products', () => {
     const products: Product[] = [
       {
         id: 'p1',
@@ -72,14 +89,15 @@ describe('Pages unit tests', () => {
       },
     ];
 
-    mockedAxios.get.mockResolvedValue({ data: products });
+    mockedUseProductsQuery.mockReturnValue({
+      data: products,
+      isLoading: false,
+      isError: false,
+    });
 
     renderWithProviders(<HomePage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Laptop')).toBeInTheDocument();
-    });
-
+    expect(screen.getByText('Laptop')).toBeInTheDocument();
     expect(screen.getByText('Add to Cart')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search 1 products...')).toBeInTheDocument();
   });
@@ -95,9 +113,7 @@ describe('Pages unit tests', () => {
           rating: { stars: 4.5, count: 12 },
         },
         quantity: 2,
-        deliveryOption: {
-          priceCents: 499,
-        },
+        deliveryOption: { priceCents: 499 },
       },
     ];
 
@@ -127,9 +143,7 @@ describe('Pages unit tests', () => {
           rating: { stars: 4.5, count: 12 },
         },
         quantity: 1,
-        deliveryOption: {
-          priceCents: 499,
-        },
+        deliveryOption: { priceCents: 499 },
       },
     ];
 

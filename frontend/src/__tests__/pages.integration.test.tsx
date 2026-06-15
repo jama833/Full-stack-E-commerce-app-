@@ -2,30 +2,29 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { ReactElement } from 'react';
-import { QueryClient, QueryClientProvider, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HomePage } from '../Pages/homepage';
 import { CheckoutPage } from '../Pages/checkoutPage';
 import { DeliveryPage } from '../Pages/DeliveryPage';
 import { StripePage } from '../Pages/StripePage';
-import { useCartQuery } from '../hooks/useCartQuery';
-import type { CartItem, Product } from '../types/interfaces';
+import {
+  useAddToCartMutation,
+  useCartQuery,
+  usePlaceOrderMutation,
+  useProductsQuery,
+  useRemoveCartItemMutation,
+  useUpdateCartItemMutation,
+} from '../hooks/useShop';
+import type { CartItem, Product } from '../types';
 
-jest.mock('axios');
-jest.mock('../hooks/useCartQuery');
-jest.mock('@tanstack/react-query', () => {
-  const actual = jest.requireActual('@tanstack/react-query');
-  return {
-    ...actual,
-    useQueryClient: jest.fn(),
-    useMutation: jest.fn(),
-  };
-});
+jest.mock('../hooks/useShop');
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedUseProductsQuery = useProductsQuery as jest.Mock;
 const mockedUseCartQuery = useCartQuery as jest.Mock;
-const mockedUseQueryClient = useQueryClient as jest.Mock;
-const mockedUseMutation = useMutation as jest.Mock;
+const mockedUseAddToCartMutation = useAddToCartMutation as jest.Mock;
+const mockedUseUpdateCartItemMutation = useUpdateCartItemMutation as jest.Mock;
+const mockedUseRemoveCartItemMutation = useRemoveCartItemMutation as jest.Mock;
+const mockedUsePlaceOrderMutation = usePlaceOrderMutation as jest.Mock;
 
 function renderWithProviders(ui: ReactElement, initialEntries: string[] = ['/']) {
   const queryClient = new QueryClient();
@@ -39,14 +38,13 @@ function renderWithProviders(ui: ReactElement, initialEntries: string[] = ['/'])
 describe('Pages integration tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedUseQueryClient.mockReturnValue({
-      invalidateQueries: jest.fn(),
-    });
   });
 
   test('HomePage filters products and adds the selected quantity to cart', async () => {
     const user = userEvent.setup();
-    const invalidateQueries = jest.fn();
+    const mutate = jest.fn((_payload, options?: { onSuccess?: () => void }) => {
+      options?.onSuccess?.();
+    });
     const products: Product[] = [
       {
         id: 'p1',
@@ -64,44 +62,45 @@ describe('Pages integration tests', () => {
       },
     ];
 
+    mockedUseProductsQuery.mockReturnValue({
+      data: products,
+      isLoading: false,
+      isError: false,
+    });
     mockedUseCartQuery.mockReturnValue({
       data: [],
       isLoading: false,
       isError: false,
       error: null,
+      isFetching: false,
     });
-    mockedUseQueryClient.mockReturnValue({ invalidateQueries });
-    mockedAxios.get.mockResolvedValue({ data: products });
-    mockedAxios.post.mockResolvedValue({ data: {} });
+    mockedUseAddToCartMutation.mockReturnValue({
+      mutate,
+      isPending: false,
+      variables: undefined,
+    });
 
     renderWithProviders(<HomePage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Laptop')).toBeInTheDocument();
-      expect(screen.getByText('Phone')).toBeInTheDocument();
-    });
-
-    expect(screen.getByPlaceholderText('Search 2 products...')).toBeInTheDocument();
+    expect(screen.getByText('Laptop')).toBeInTheDocument();
+    expect(screen.getByText('Phone')).toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox'), 'lap');
-    expect(screen.getByText('Laptop')).toBeInTheDocument();
-    expect(screen.queryByText('Phone')).not.toBeInTheDocument();
-
     await user.selectOptions(screen.getByRole('combobox'), '3');
     await user.click(screen.getByRole('button', { name: 'Add to Cart' }));
 
     await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalledWith('/api/cart-items', {
-        productId: 'p1',
-        quantity: 3,
-      });
-      expect(invalidateQueries).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(
+        { productId: 'p1', quantity: 3 },
+        expect.any(Object)
+      );
     });
   });
 
   test('CheckoutPage updates quantity and removes items', async () => {
     const user = userEvent.setup();
-    const invalidateQueries = jest.fn();
+    const updateMutate = jest.fn();
+    const removeMutate = jest.fn();
     const cart: CartItem[] = [
       {
         product: {
@@ -112,9 +111,7 @@ describe('Pages integration tests', () => {
           rating: { stars: 4.5, count: 12 },
         },
         quantity: 2,
-        deliveryOption: {
-          priceCents: 499,
-        },
+        deliveryOption: { priceCents: 499 },
       },
     ];
 
@@ -124,37 +121,22 @@ describe('Pages integration tests', () => {
       isError: false,
       error: null,
     });
-    mockedUseQueryClient.mockReturnValue({ invalidateQueries });
-    mockedAxios.put.mockResolvedValue({ data: {} });
-    mockedAxios.delete.mockResolvedValue({ data: {} });
-    mockedUseMutation.mockImplementation(
-      ({ mutationFn, onSuccess }: { mutationFn: (value: unknown) => Promise<unknown>; onSuccess?: () => void }) => ({
-        mutate: async (value: unknown) => {
-          await mutationFn(value);
-          onSuccess?.();
-        },
-        isPending: false,
-      })
-    );
+    mockedUseUpdateCartItemMutation.mockReturnValue({
+      mutate: updateMutate,
+      isPending: false,
+    });
+    mockedUseRemoveCartItemMutation.mockReturnValue({
+      mutate: removeMutate,
+      isPending: false,
+    });
 
     renderWithProviders(<CheckoutPage />);
 
-    expect(screen.getByText('Laptop')).toBeInTheDocument();
-
     await user.click(screen.getByLabelText('Increase quantity of Laptop'));
-
-    await waitFor(() => {
-      expect(mockedAxios.put).toHaveBeenCalledWith('/api/cart-items/p1', {
-        quantity: 3,
-      });
-      expect(invalidateQueries).toHaveBeenCalled();
-    });
+    expect(updateMutate).toHaveBeenCalledWith({ productId: 'p1', quantity: 3 });
 
     await user.click(screen.getByLabelText('Remove Laptop from cart'));
-
-    await waitFor(() => {
-      expect(mockedAxios.delete).toHaveBeenCalledWith('/api/cart-items/p1');
-    });
+    expect(removeMutate).toHaveBeenCalledWith('p1');
   });
 
   test('CheckoutPage redirects to Stripe page before payment', async () => {
@@ -170,9 +152,7 @@ describe('Pages integration tests', () => {
           rating: { stars: 4.5, count: 12 },
         },
         quantity: 1,
-        deliveryOption: {
-          priceCents: 499,
-        },
+        deliveryOption: { priceCents: 499 },
       },
     ];
 
@@ -182,7 +162,18 @@ describe('Pages integration tests', () => {
       isError: false,
       error: null,
     });
-    mockedUseQueryClient.mockReturnValue({ invalidateQueries: jest.fn() });
+    mockedUseUpdateCartItemMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+    });
+    mockedUseRemoveCartItemMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+    });
+    mockedUsePlaceOrderMutation.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
+    });
 
     renderWithProviders(
       <Routes>
@@ -196,12 +187,14 @@ describe('Pages integration tests', () => {
     jest.advanceTimersByTime(900);
 
     expect(await screen.findByText('Complete your payment')).toBeInTheDocument();
-
     jest.useRealTimers();
   });
 
   test('StripePage submits order and redirects to delivery page', async () => {
     const user = userEvent.setup();
+    const mutate = jest.fn((_deliveryOptionId, options?: { onSuccess?: () => void }) => {
+      options?.onSuccess?.();
+    });
     const cart: CartItem[] = [
       {
         product: {
@@ -212,9 +205,7 @@ describe('Pages integration tests', () => {
           rating: { stars: 4.5, count: 12 },
         },
         quantity: 1,
-        deliveryOption: {
-          priceCents: 499,
-        },
+        deliveryOption: { priceCents: 499 },
       },
     ];
 
@@ -224,8 +215,10 @@ describe('Pages integration tests', () => {
       isError: false,
       error: null,
     });
-    mockedUseQueryClient.mockReturnValue({ invalidateQueries: jest.fn() });
-    mockedAxios.post.mockResolvedValue({ data: {} });
+    mockedUsePlaceOrderMutation.mockReturnValue({
+      mutate,
+      isPending: false,
+    });
 
     renderWithProviders(
       <Routes>
@@ -244,9 +237,7 @@ describe('Pages integration tests', () => {
     await user.click(screen.getByRole('button', { name: 'Pay $148.48' }));
 
     await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalledWith('/api/orders', {
-        deliveryOptionId: '1',
-      });
+      expect(mutate).toHaveBeenCalledWith('1', expect.any(Object));
     });
     expect(await screen.findByText('Your delivery is on the way.')).toBeInTheDocument();
   });

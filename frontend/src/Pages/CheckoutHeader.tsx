@@ -6,9 +6,6 @@ interface CheckoutHeaderProps {
 }
 
 export function CheckoutHeader({ totalQuantity }: CheckoutHeaderProps) {
-
-  // Ternary operator to determine the correct label for singular or plural items 
-        
   const itemLabel = totalQuantity === 1 ? 'item' : 'items';
 
   return (

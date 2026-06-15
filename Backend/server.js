@@ -5,10 +5,32 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+// Allow browser requests from any origin by default.
+// Set CORS_ORIGIN to a comma-separated list to restrict access.
+const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowAllOrigins = allowedOrigins.includes('*');
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowAllOrigins || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
 // Middleware
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Serve static images
@@ -359,5 +381,5 @@ app.post('/api/reset', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`\n✓ Server running on http://localhost:${PORT}`);
-  console.log(`✓ CORS enabled for ${CORS_ORIGIN}\n`);
+  console.log(`✓ CORS enabled for: ${allowAllOrigins ? 'all origins (*)' : allowedOrigins.join(', ')}\n`);
 });

@@ -16,6 +16,3 @@ export interface CartItem {
     priceCents: number;
   };
 }
-
-
-

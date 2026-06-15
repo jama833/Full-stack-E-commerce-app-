@@ -6,11 +6,9 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "zip": "node zipFiles.js"
+    "zip": "node zipFiles.cjs"
   },
   "dependencies": {
-    "adm-zip": "^0.5.17",
-    "archiver": "^8.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2"

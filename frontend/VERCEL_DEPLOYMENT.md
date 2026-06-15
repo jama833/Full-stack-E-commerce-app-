@@ -1,60 +1,50 @@
-# Deploying to Vercel
+# Deploy frontend to Vercel
 
-## Option 1: Deploy via Vercel CLI (Quickest)
+## Option 1: Vercel Dashboard (recommended)
 
-1. Install Vercel CLI globally:
-   ```bash
-   npm i -g vercel
-   ```
+1. Push your code to GitHub.
+2. Go to [vercel.com/new](https://vercel.com/new).
+3. Import your repository.
+4. Set **Root Directory** to `Full-stack-e-commerce-app-copy/frontend`.
+5. Vercel auto-detects Vite. Confirm:
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+6. Click **Deploy**.
 
-2. Navigate to the frontend folder:
-   ```bash
-   cd Full-stack-e-commerce-app-copy/frontend
-   ```
+No environment variables are required. API and image requests are proxied to AWS via `vercel.json`.
 
-3. Deploy:
-   ```bash
-   vercel
-   ```
+## Option 2: Vercel CLI
 
-4. Follow the prompts:
-   - Link to existing Vercel project or create new
-   - Confirm build settings (should auto-detect Vite)
-   - Deploy
+```bash
+cd Full-stack-e-commerce-app-copy/frontend
+npm i -g vercel
+vercel
+```
 
-## Option 2: Deploy via GitHub Integration (Recommended)
+## How it works
 
-1. Push your code to GitHub:
-   ```bash
-   git add .
-   git commit -m "Add Vercel configuration"
-   git push
-   ```
+| Request | Handled by |
+|---------|------------|
+| `/api/*` | Vercel rewrite → AWS Elastic Beanstalk |
+| `/images/*` | Vercel rewrite → AWS Elastic Beanstalk |
+| `/checkout`, `/stripe`, etc. | SPA fallback → `index.html` |
 
-2. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+## After deploy
 
-3. Click "New Project" → Import your GitHub repo
+1. Open your Vercel URL.
+2. Confirm products load.
+3. Test add to cart and checkout.
 
-4. Vercel will auto-detect Vite configuration
+## Backend CORS
 
-5. Deploy!
+Set on AWS Elastic Beanstalk (`CORS_ORIGIN`):
 
-## Configuration Details
+```
+*
+```
 
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **API Proxy**: All `/api/*` requests forward to your Elastic Beanstalk backend
-- **Client-side Routing**: Configured to serve `index.html` for unknown routes
+Or include your Vercel URL:
 
-## Environment Variables (if needed)
-
-Add in Vercel dashboard → Settings → Environment Variables:
-- `BACKEND_URL`: (optional) Your backend API URL
-
-## Verify Deployment
-
-After deployment:
-1. Visit your Vercel URL
-2. Check that products load from the backend
-3. Test adding items to cart
-4. Check browser console for any errors
+```
+https://your-app.vercel.app
+```

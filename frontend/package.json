@@ -2,25 +2,20 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
-  "main": "server.cjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "npm run build && node server.cjs",
-    "lint": "eslint .",
     "preview": "vite preview",
+    "lint": "eslint .",
     "test": "jest --runInBand",
     "test:unit": "jest --runInBand src/__tests__/pages.unit.test.tsx",
-    "test:integration": "jest --runInBand src/__tests__/pages.integration.test.tsx",
-    "zip": "node zipFiles.cjs"
+    "test:integration": "jest --runInBand src/__tests__/pages.integration.test.tsx"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.96.2",
-    "adm-zip": "^0.5.17",
     "axios": "^1.8.4",
     "dayjs": "^1.11.20",
-    "express": "^5.2.1",
-    "http-proxy-middleware": "^2.0.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-icons": "^5.6.0",
@@ -43,7 +38,6 @@
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "ts-jest": "^29.4.9",
-    "ts-node": "^10.9.2",
     "typescript": "^6.0.2",
     "vite": "^6.3.5"
   }

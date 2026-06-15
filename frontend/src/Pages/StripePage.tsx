@@ -1,11 +1,9 @@
 import './stripe.css';
-import axios from 'axios';
 import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { FiArrowLeft, FiCheck, FiCreditCard, FiLock, FiShield } from 'react-icons/fi';
-import { useQueryClient } from '@tanstack/react-query';
-import { cartQueryKey, useCartQuery } from '../hooks/useCartQuery';
-import { getItemsTotal, getShippingTotal, getTotalQuantity } from '../assets/cartSummary';
+import { useCartQuery, usePlaceOrderMutation } from '../hooks/useShop';
+import { formatPrice, getOrderSummary } from '../utils';
 import { CheckoutHeader } from './CheckoutHeader';
 import { Footer } from './Footer';
 
@@ -18,7 +16,7 @@ interface PaymentForm {
   postalCode: string;
 }
 
-const defaultPaymentForm: PaymentForm = {
+const DEFAULT_PAYMENT_FORM: PaymentForm = {
   email: '',
   cardNumber: '',
   expiry: '',
@@ -27,45 +25,27 @@ const defaultPaymentForm: PaymentForm = {
   postalCode: '',
 };
 
-const formatPrice = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
-
 export function StripePage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState<PaymentForm>(defaultPaymentForm);
-  const [isPaying, setIsPaying] = useState<boolean>(false);
-  const [paymentError, setPaymentError] = useState<string>('');
+  const [form, setForm] = useState<PaymentForm>(DEFAULT_PAYMENT_FORM);
+  const [paymentError, setPaymentError] = useState('');
 
-  const {
-    data: cart = [],
-    isLoading,
-    isError,
-    error,
-  } = useCartQuery();
-
-  const totalQuantity = getTotalQuantity(cart);
-  const itemsTotal = getItemsTotal(cart);
-  const shippingTotal = getShippingTotal(cart);
-  const subtotal = itemsTotal + shippingTotal;
-  const tax = Math.round(subtotal * 0.1);
-  const orderTotal = subtotal + tax;
+  const { data: cart = [], isLoading, isError, error } = useCartQuery();
+  const placeOrderMutation = usePlaceOrderMutation();
+  const summary = getOrderSummary(cart);
 
   const orderPreview = useMemo(
     () => cart.slice(0, 3).map((item) => item.product.name).join(', '),
     [cart]
   );
 
-  const handleInputChange = (field: keyof PaymentForm) => (
-    event: ChangeEvent<HTMLInputElement>
-  ): void => {
-    setForm((current) => ({
-      ...current,
-      [field]: event.target.value,
-    }));
-    setPaymentError('');
-  };
+  const handleInputChange =
+    (field: keyof PaymentForm) => (event: ChangeEvent<HTMLInputElement>) => {
+      setForm((current) => ({ ...current, [field]: event.target.value }));
+      setPaymentError('');
+    };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (cart.length === 0) {
@@ -73,20 +53,16 @@ export function StripePage() {
       return;
     }
 
-    setIsPaying(true);
-    setPaymentError('');
-
-    try {
-      await axios.post('/api/orders', { deliveryOptionId: '1' });
-      await queryClient.invalidateQueries({ queryKey: cartQueryKey });
-      navigate('/delivery');
-    } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? error.response?.data?.error || error.message
-        : 'Payment could not be completed.';
-      setPaymentError(message);
-      setIsPaying(false);
-    }
+    placeOrderMutation.mutate('1', {
+      onSuccess: () => navigate('/delivery'),
+      onError: (mutationError) => {
+        const message =
+          mutationError instanceof Error
+            ? mutationError.message
+            : 'Payment could not be completed.';
+        setPaymentError(message);
+      },
+    });
   };
 
   if (isLoading) {
@@ -96,7 +72,7 @@ export function StripePage() {
   if (isError) {
     return (
       <div className="stripe-page">
-        Error loading payment: {error?.message || 'Something went wrong'}
+        Error loading payment: {error?.message ?? 'Something went wrong'}
       </div>
     );
   }
@@ -104,7 +80,7 @@ export function StripePage() {
   return (
     <>
       <title>Stripe Payment</title>
-      <CheckoutHeader totalQuantity={totalQuantity} />
+      <CheckoutHeader totalQuantity={summary.totalQuantity} />
 
       <main className="stripe-page">
         <Link className="stripe-back-link" to="/checkout">
@@ -196,15 +172,15 @@ export function StripePage() {
               <button
                 className="stripe-pay-button button-primary"
                 type="submit"
-                disabled={cart.length === 0 || isPaying}
+                disabled={cart.length === 0 || placeOrderMutation.isPending}
               >
-                {isPaying ? (
+                {placeOrderMutation.isPending ? (
                   <span className="stripe-processing">
                     <FiCheck aria-hidden="true" />
                     Processing
                   </span>
                 ) : (
-                  `Pay ${formatPrice(orderTotal)}`
+                  `Pay ${formatPrice(summary.orderTotal)}`
                 )}
               </button>
             </form>
@@ -224,20 +200,20 @@ export function StripePage() {
 
             <div className="stripe-summary-lines">
               <div>
-                <span>Items ({totalQuantity})</span>
-                <strong>{formatPrice(itemsTotal)}</strong>
+                <span>Items ({summary.totalQuantity})</span>
+                <strong>{formatPrice(summary.itemsTotal)}</strong>
               </div>
               <div>
                 <span>Shipping</span>
-                <strong>{formatPrice(shippingTotal)}</strong>
+                <strong>{formatPrice(summary.shippingTotal)}</strong>
               </div>
               <div>
                 <span>Estimated tax</span>
-                <strong>{formatPrice(tax)}</strong>
+                <strong>{formatPrice(summary.tax)}</strong>
               </div>
               <div className="stripe-total-line">
                 <span>Total</span>
-                <strong>{formatPrice(orderTotal)}</strong>
+                <strong>{formatPrice(summary.orderTotal)}</strong>
               </div>
             </div>
 

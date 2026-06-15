@@ -1,63 +1,45 @@
 import './homepage.css';
-import axios from 'axios';
-import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { cartQueryKey } from '../hooks/useCartQuery';
-import { Header } from './Header';
+import { useMemo, useState } from 'react';
+import {
+  useAddToCartMutation,
+  useProductsQuery,
+} from '../hooks/useShop';
+import type { Product } from '../types';
+import { formatPrice, getImageSrc, getRatingImageSrc } from '../utils';
 import { Footer } from './Footer';
-import type { Product } from '../types/interfaces';
+import { Header } from './Header';
 
-const heroProducts = [
-  {
-    src: '/images/products/men-athletic-shoes-white.jpg',
-    alt: 'White athletic shoes',
-    className: 'hero-product hero-product-main',
-  },
-  {
-    src: '/images/products/black-and-silver-espresso-maker.jpg',
-    alt: 'Black and silver espresso maker',
-    className: 'hero-product hero-product-top',
-  },
-  {
-    src: '/images/products/women-striped-beach-dress.jpg',
-    alt: 'Striped beach dress',
-    className: 'hero-product hero-product-bottom',
-  },
-];
+const HERO_LAYOUT_CLASSES = [
+  'hero-product hero-product-main',
+  'hero-product hero-product-top',
+  'hero-product hero-product-bottom',
+] as const;
 
 export function HomePage() {
-  const queryClient = useQueryClient();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [addedProducts, setAddedProducts] = useState<Record<string, boolean>>({});
+  const { data: products = [], isLoading, isError } = useProductsQuery();
+  const addToCartMutation = useAddToCartMutation();
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [addedProductIds, setAddedProductIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const response = await axios.get<Product[]>('/api/products');
-        setProducts(response.data);
-      } catch (error) {
-        console.error(error);
-        setProducts([]);
-      }
-    }
+  const heroProducts = useMemo(() => products.slice(0, 3), [products]);
 
-    fetchProducts();
-  }, []);
-
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((product) =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [products, searchQuery]
   );
 
   const searchPlaceholder = products.length
     ? `Search ${products.length} products...`
     : 'Search products...';
 
-  const getImageSrc = (imagePath: string) =>
-    imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-
-  const getRoundedRating = (stars: number) => Math.round(stars * 2) / 2;
+  const pendingProductId = addToCartMutation.isPending
+    ? addToCartMutation.variables?.productId
+    : null;
 
   const scrollToProducts = () => {
     document.querySelector('.products-grid')?.scrollIntoView({
@@ -66,42 +48,29 @@ export function HomePage() {
     });
   };
 
-  const updateQuantity = (productId: string, value: string) => {
-    setQuantities({
-      ...quantities,
-      [productId]: Number(value),
-    });
-  };
-
-  const addToCart = async (product: Product) => {
-    try {
-      await axios.post('/api/cart-items', {
-        productId: product.id,
-        quantity: quantities[product.id] || 1,
-      });
-
-      queryClient.invalidateQueries({ queryKey: cartQueryKey });
-      setAddedProducts({ ...addedProducts, [product.id]: true });
-
-      setTimeout(() => {
-        setAddedProducts((current) => ({
-          ...current,
-          [product.id]: false,
-        }));
-      }, 2000);
-    } catch (error) {
-      console.error(error);
-      alert('Could not add this item. Please try again.');
-    }
+  const handleAddToCart = (product: Product) => {
+    addToCartMutation.mutate(
+      { productId: product.id, quantity: quantities[product.id] ?? 1 },
+      {
+        onSuccess: () => {
+          setAddedProductIds((current) => new Set(current).add(product.id));
+          window.setTimeout(() => {
+            setAddedProductIds((current) => {
+              const next = new Set(current);
+              next.delete(product.id);
+              return next;
+            });
+          }, 2000);
+        },
+        onError: () => window.alert('Could not add this item. Please try again.'),
+      }
+    );
   };
 
   return (
     <>
       <title>Ecommerce</title>
-      <Header
-        onSearch={setSearchQuery}
-        searchPlaceholder={searchPlaceholder}
-      />
+      <Header onSearch={setSearchQuery} searchPlaceholder={searchPlaceholder} />
 
       <div className="home-page">
         <section className="hero-section" aria-label="Featured shopping collection">
@@ -109,27 +78,35 @@ export function HomePage() {
             <div className="hero-kicker">Fresh picks every day</div>
             <h1>Upgrade the cart before the weekend lands.</h1>
             <p>
-              Discover wardrobe staples, home products, and everyday essentials with a simple
-              checkout.
+              Discover wardrobe staples, home products, and everyday essentials with a
+              simple checkout.
             </p>
 
             <div className="hero-actions">
-              <button className="hero-primary-button button-primary" onClick={scrollToProducts}>
+              <button
+                type="button"
+                className="hero-primary-button button-primary"
+                onClick={scrollToProducts}
+              >
                 Shop collection
               </button>
-              <button className="hero-secondary-button" onClick={() => setSearchQuery('shoes')}>
+              <button
+                type="button"
+                className="hero-secondary-button"
+                onClick={() => setSearchQuery('shoes')}
+              >
                 Explore shoes
               </button>
             </div>
           </div>
 
-          <div className="hero-stage" aria-hidden="true">
-            <div className="hero-orbit hero-orbit-one"></div>
-            <div className="hero-orbit hero-orbit-two"></div>
+          <div className="hero-stage">
+            <div className="hero-orbit hero-orbit-one" />
+            <div className="hero-orbit hero-orbit-two" />
 
-            {heroProducts.map((item) => (
-              <div key={item.src} className={item.className}>
-                <img src={item.src} alt={item.alt} />
+            {heroProducts.map((product, index) => (
+              <div key={product.id} className={HERO_LAYOUT_CLASSES[index]}>
+                <img src={getImageSrc(product.image)} alt={product.name} />
               </div>
             ))}
 
@@ -145,62 +122,82 @@ export function HomePage() {
         </section>
 
         <div className="products-grid">
-          {filteredProducts.length === 0 ? (
+          {isLoading || isError || filteredProducts.length === 0 ? (
             <div className="no-products-message">
-              <p>No products found matching your search.</p>
+              {isLoading && <p>Loading products...</p>}
+              {isError && <p>Could not load products from the server.</p>}
+              {!isLoading && !isError && filteredProducts.length === 0 && (
+                <p>No products found matching your search.</p>
+              )}
             </div>
           ) : (
-            filteredProducts.map((product) => (
-              <div key={product.id} className="product-container">
-                <div className="product-image-container">
-                  <img className="product-image" src={getImageSrc(product.image)} alt={product.name} />
-                </div>
+            filteredProducts.map((product) => {
+              const quantity = quantities[product.id] ?? 1;
+              const isAdding = pendingProductId === product.id;
+              const isAdded = addedProductIds.has(product.id);
 
-                <div className="product-name limit-text-to-2-lines">{product.name}</div>
-
-                <div className="product-rating-container">
-                  <img
-                    className="product-rating-stars"
-                    src={`/images/ratings/rating-${getRoundedRating(product.rating.stars) * 10}.png`}
-                    alt={`${product.rating.stars} star rating`}
-                  />
-                  <div className="product-rating-count link-primary">
-                    {product.rating.count}
+              return (
+                <div key={product.id} className="product-container">
+                  <div className="product-image-container">
+                    <img
+                      className="product-image"
+                      src={getImageSrc(product.image)}
+                      alt={product.name}
+                    />
                   </div>
-                </div>
 
-                <div className="product-price">
-                  ${(product.priceCents / 100).toFixed(2)}
-                </div>
+                  <div className="product-name limit-text-to-2-lines">{product.name}</div>
 
-                <div className="product-quantity-container">
-                  <select
-                    value={quantities[product.id] || 1}
-                    onChange={(event) => updateQuantity(product.id, event.target.value)}
+                  <div className="product-rating-container">
+                    <img
+                      className="product-rating-stars"
+                      src={getRatingImageSrc(product.rating.stars)}
+                      alt={`${product.rating.stars} star rating`}
+                    />
+                    <div className="product-rating-count link-primary">
+                      {product.rating.count}
+                    </div>
+                  </div>
+
+                  <div className="product-price">{formatPrice(product.priceCents)}</div>
+
+                  <div className="product-quantity-container">
+                    <select
+                      value={quantity}
+                      onChange={(event) =>
+                        setQuantities((current) => ({
+                          ...current,
+                          [product.id]: Number(event.target.value),
+                        }))
+                      }
+                    >
+                      {Array.from({ length: 10 }, (_, index) => (
+                        <option key={index + 1} value={index + 1}>
+                          {index + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="product-spacer" />
+
+                  <div className={`added-to-cart ${isAdded ? 'show' : ''}`}>
+                    <img src="/images/icons/checkmark.png" alt="" />
+                    Added
+                  </div>
+
+                  <button
+                    type="button"
+                    className="add-to-cart-button button-primary"
+                    onClick={() => handleAddToCart(product)}
+                    disabled={isAdding}
+                    aria-busy={isAdding}
                   >
-                    {Array.from({ length: 10 }, (_, index) => (
-                      <option key={index + 1} value={index + 1}>
-                        {index + 1}
-                      </option>
-                    ))}
-                  </select>
+                    {isAdded ? 'Added!' : isAdding ? 'Adding...' : 'Add to Cart'}
+                  </button>
                 </div>
-
-                <div className="product-spacer"></div>
-
-                <div className={`added-to-cart ${addedProducts[product.id] ? 'show' : ''}`}>
-                  <img src="/images/icons/checkmark.png" alt="" />
-                  Added
-                </div>
-
-                <button
-                  className="add-to-cart-button button-primary"
-                  onClick={() => addToCart(product)}
-                >
-                  Add to Cart
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

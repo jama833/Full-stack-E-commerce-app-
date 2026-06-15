@@ -3,7 +3,6 @@ import { CheckoutPage } from './Pages/checkoutPage';
 import { DeliveryPage } from './Pages/DeliveryPage';
 import { StripePage } from './Pages/StripePage';
 import { Routes, Route } from 'react-router';
-import './App.css';
 
 function App() {
   return (

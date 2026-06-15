@@ -195,6 +195,12 @@
   }
 }
 
+.header .cart-quantity.is-updating {
+  animation: pop 0.3s ease-out;
+  background: #ffb84d;
+  color: #1a1a2e;
+}
+
 @keyframes pop {
   from {
     transform: scale(0);
